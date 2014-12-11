@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Image-Hash
-version:            0.01
+version:            0.02
 abstract:           An image hashing library to calculate an images average hash, perception has and difference has.
 author:
     - Runar Buvik (runarb@gmail.com)
@@ -11,6 +11,7 @@ configure_requires:
 build_requires:
     ExtUtils::MakeMaker:  0
 requires:
+    Carp:          0
     File::Slurp:   0
     GD:            0
     List::Util:    0

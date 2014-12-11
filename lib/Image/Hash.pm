@@ -4,14 +4,14 @@ use strict;
 use warnings;
 
 use List::Util qw(sum);
-use Switch;
+use Carp;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 
 =head1 NAME
 
-Image::Hash - Perceptual image hashing [aHash, pHash, dHash].
+Image::Hash - Perceptual image hashing [aHash, dHash, pHash].
 
 =head1 SYNOPSIS
 
@@ -66,13 +66,19 @@ sub new {
 	$self->{'image'} = shift;
 	$self->{'module'} = shift;
 	
-	# Try to load the image handler the user asked for
 	if ($self->{'module'}) {
-		switch ($self->{'module'}) {
-			case "GD"			{ require GD; }
-			case "ImageMagick"	{ require Image::Magick; }
-			case "Imager"		{ require Imager; }
-			else				{ die("Unknown mudule: '" . $self->{'module'} . "'."); }
+		# Try to load the image handler the user asked for
+		if ($self->{'module'} eq "GD") {
+			require GD;
+		}
+		elsif ($self->{'module'} eq "ImageMagick" || $self->{'module'} eq "Image::Magick") {
+			require Image::Magick;
+		}
+		elsif ($self->{'module'} eq "Imager") {
+			require Imager;
+		}
+		else {
+			croak("Unknown mudule: '" . $self->{'module'} . "'. Please use either GD, ImageMagick or Imager as module.");
 		}
 	}
 	else {
@@ -87,7 +93,7 @@ sub new {
 			$self->{'module'} = "Imager";
 		}
 		else {
-			die("No image maudule avalibal. Can't load  GD, ImageMagic or Imager.");
+			croak("No image maudule avalibal. Can't load  GD, ImageMagic or Imager.");
 		}
 	}
 	
@@ -531,7 +537,7 @@ sub reducedimage {
 	}
 
 	my $data;
-	$self->{ $opt{'im'} }->write(data => \$data, type => 'png') or die $self->{ $opt{'im'} }->errstr;
+	$self->{ $opt{'im'} }->write(data => \$data, type => 'png') or carp $self->{ $opt{'im'} }->errstr;
 	return $data;
 }
 
@@ -548,6 +554,10 @@ Please see the C<eg/> directory for further examples.
     runarb@gmail.com
     http://www.runarb.com
 
+=head1 Git
+
+https://github.com/runarbu/PerlImageHash
+
 =head1 COPYRIGHT
 
 This program is free software; you can redistribute
@@ -559,7 +569,7 @@ LICENSE file included with this module.
 
 =head1 SEE ALSO
 
-Articles L<Looks like it|http://www.hackerfactor.com/blog/index.php?/archives/432-Looks-Like-It.html> and L<Kind of like that|http://www.hackerfactor.com/blog/?/archives/529-Kind-of-Like-That.html> by Neal Krawetz that describe the implementation.
+Articles L<Looks like it|http://www.hackerfactor.com/blog/index.php?/archives/432-Looks-Like-It.html> and L<Kind of like that|http://www.hackerfactor.com/blog/?/archives/529-Kind-of-Like-That.html> by Neal Krawetz that describes the theory behind aHash, dHash, pHash.
 
 L<ImageHash|https://github.com/JohannesBuchner/imagehash> image hashing library written in Python that dos the same thing.
 
