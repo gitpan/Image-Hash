@@ -1,7 +1,7 @@
 --- #YAML:1.0
 name:               Image-Hash
-version:            0.02
-abstract:           An image hashing library to calculate an images average hash, perception has and difference has.
+version:            0.03
+abstract:           An image hashing library to calculate an images average hash, perception hash and difference hash.
 author:
     - Runar Buvik (runarb@gmail.com)
 license:            unknown
