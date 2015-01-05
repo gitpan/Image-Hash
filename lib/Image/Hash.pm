@@ -6,7 +6,7 @@ use warnings;
 use List::Util qw(sum);
 use Carp;
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 
 =head1 NAME
@@ -102,31 +102,35 @@ sub new {
 	
 	if ($self->{'module'} eq 'GD') {
 		$self->{'im'} = GD::Image->new( $self->{'image'} );
-		if ($self->{'im'} == 0) {
-			warn("Can't make image from this value.");
+		if (not defined $self->{'im'}) {
+			carp("Can't make image from this value");
 			return undef;
 		}
 		$self->{'reduse'} = \&reduse_GD;
 		$self->{'pixels'} = \&pixels_GD;
+		$self->{'blob'}   = \&blob_GD;
 	}
 	elsif ($self->{'module'} eq 'ImageMagick') {
 		$self->{'im'} = Image::Magick->new();
 		my $ret = $self->{'im'}->BlobToImage( $self->{'image'} );
 		if ($ret == 0) {
-			warn("Can't make image from this value.");
+			carp("Can't make image from this value");
 			return undef;
 		}
 		$self->{'reduse'} = \&reduse_ImageMagick;
 		$self->{'pixels'} = \&pixels_ImageMagick;
+		$self->{'blob'}   = \&blob_ImageMagick;
+
 	}
 	elsif ($self->{'module'} eq 'Imager') {
 		$self->{'im'} = Imager->new(data=>$self->{'image'});
-		if ($self->{'im'} == 0) {
-			warn("Can't make image from this value.");
+		if (not defined $self->{'im'}) {
+			carp("Can't make image from this value: " . Imager->errstr());
 			return undef;
 		}
 		$self->{'reduse'} = \&reduse_Imager;
 		$self->{'pixels'} = \&pixels_Imager;
+		$self->{'blob'}   = \&blob_Imager;
 	}
 	
 
@@ -164,7 +168,15 @@ sub reduse_GD {
 
 	my ($xs, $ys) = split(/x/, $opt{'geometry'});
 
-	$self->{ $opt{'im'} } = $self->{ $opt{'im'} }->copyResized($self->{ $opt{'im'} }, 0, 0, 0, 0, $xs, $ys, $self->{ $opt{'im'} }->getBounds);
+	my $dest = GD::Image->new($xs, $ys);
+
+	$dest->copyResampled($self->{ $opt{'im'} },
+		0, 0, 		# (destX, destY)
+		0, 0, 		# (srcX,  srxY )
+		$xs, $ys, 	# (destX, destY)
+		$self->{ $opt{'im'} }->width, $self->{ $opt{'im'} }->height
+	);
+	$self->{ $opt{'im'} } = $dest;
 }
 
 # Reduse the size of an image using Image::Magick
@@ -179,17 +191,41 @@ sub reduse_ImageMagick {
 # Reduse the size of an image using Imager
 sub reduse_Imager {
 	my ($self, %opt) = @_;
-	$self->{ $opt{'im'} } = $self->{'im'};
-
 	my ($xs, $ys) = split(/x/, $opt{'geometry'});
 
-	$self->{ $opt{'im'} } = $self->{ $opt{'im'} }->scale(xpixels=>30,ypixels=>30);
+	$self->{ $opt{'im'} } = $self->{ 'im' }->scale(xpixels => $xs, ypixels => $ys, type => "nonprop");
+}
+
+
+# Return the image as a blob using GD
+sub blob_GD {
+        my ($self, %opt) = @_;
+
+	return $self->{ $opt{'im'} }->png;
+}
+
+# Return the image as a blob using Image::Magick
+sub blob_ImageMagick {
+        my ($self, %opt) = @_;
+
+	my $blobs = $self->{ $opt{'im'} }->ImageToBlob(magick => 'png');
+
+	return $blobs;
+}
+
+# Return the image as a blob using Imager
+sub blob_Imager {
+        my ($self, %opt) = @_;
+	
+	my $data;
+	$self->{ $opt{'im'} }->write(data => \$data, type => 'png') or carp $self->{ $opt{'im'} }->errstr;
+
+	return $data;
 }
 
 # Return the pixel values for an image when using GD
 sub pixels_GD {
 	my ($self, %opt) = @_;
-	$self->{ $opt{'im'} } = $self->{'im'};
 	
 	my ($xs, $ys) = split(/x/, $opt{'geometry'});
 	
@@ -210,14 +246,11 @@ sub pixels_GD {
 # Return the pixel values for an image when using Image::Magick
 sub pixels_ImageMagick {
 	my ($self, %opt) = @_;
-	$self->{ $opt{'im'} } = $self->{'im'};
-	
 	my ($xs, $ys) = split(/x/, $opt{'geometry'});
 	
 	my @pixels;
 	for(my $y=0; $y<$ys;$y++) {
 			for(my $x=0; $x<$xs;$x++) {
-
 					my @pixel = $self->{ $opt{'im'} }->GetPixel(x=>$x,y=>$y,normalize => 0);
 					my $grey = $pixel[0]*0.3 + $pixel[1]*0.59 + $pixel[2]*0.11;
 					push(@pixels, $grey);
@@ -235,21 +268,16 @@ sub pixels_ImageMagick {
 # Return the pixel values for an image when using Imager
 sub pixels_Imager {
 	my ($self, %opt) = @_;
-	$self->{ $opt{'im'} } = $self->{'im'};
-	
 	my ($xs, $ys) = split(/x/, $opt{'geometry'});
-	
 	my @pixels;
 	for(my $y=0; $y<$ys;$y++) {
 			for(my $x=0; $x<$xs;$x++) {
-
-					my @color = $self->{ $opt{'im'} }->getpixel(x => $x, y => $y);
-					my ($red, $green, $blue, $alpha) = $color[0]->rgba();
+					my $c = $self->{ $opt{'im'} }->getpixel(x => $x, y => $y);
+					my ($red, $green, $blue, $alpha) = $c->rgba();
 					my $grey = $red*0.3 + $green*0.59 + $blue*0.11;
 					push(@pixels, $grey);
 			}
 	}
-	
 	return @pixels;
 }
 
@@ -533,12 +561,10 @@ sub reducedimage {
 
 
 	if(!$self->{ $opt{'im'} }) {
-		$self->reduse( %opt );
+		$self->{'reduse'}->($self, %opt );
 	}
 
-	my $data;
-	$self->{ $opt{'im'} }->write(data => \$data, type => 'png') or carp $self->{ $opt{'im'} }->errstr;
-	return $data;
+	$self->{'blob'}->($self, %opt );
 }
 
 =head1 EXAMPLES
@@ -546,6 +572,8 @@ sub reducedimage {
 Please see the C<eg/> directory for further examples.
 
 =head1 BUGS
+
+Image::Hash support different back ends (GD, Image::Magick or Imager), but because the different back ends work slightly different they will not produce the same hash for the same image. More info is available at https://github.com/runarbu/PerlImageHash/blob/master/Hash_differences.md .
 
 =head1 AUTHOR
 
